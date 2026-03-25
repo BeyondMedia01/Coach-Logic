@@ -40,10 +40,11 @@ export default async function handler(req, res) {
     if (!elevenRes.ok) {
       const detail = await elevenRes.text();
       console.error("ElevenLabs STT error:", elevenRes.status, detail);
-      return res.status(elevenRes.status).json({ error: "Transcription failed", detail });
+      return res.status(elevenRes.status).json({ error: `ElevenLabs ${elevenRes.status}: ${detail}` });
     }
 
     const data = await elevenRes.json();
+    console.log("ElevenLabs STT response:", JSON.stringify(data));
     return res.status(200).json({ transcript: data.text || "" });
   } catch (err) {
     console.error("transcribe handler error:", err);

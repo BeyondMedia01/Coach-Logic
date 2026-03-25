@@ -453,7 +453,7 @@ const startDictation = async (button) => {
       try {
         const blob = new Blob(chunks, { type: mimeType });
         const formData = new FormData();
-        formData.append("audio", blob, mimeType === "audio/webm" ? "audio.webm" : "audio.mp4");
+        formData.append("file", blob, mimeType === "audio/webm" ? "audio.webm" : "audio.mp4");
         formData.append("language_code", { English:"en", Spanish:"es", French:"fr", Portuguese:"pt", German:"de" }[state.language] || "en");
         formData.append("model_id", "scribe_v1");
 
