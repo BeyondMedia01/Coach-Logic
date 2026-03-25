@@ -17,8 +17,9 @@ const state = {
   tone: "Professional",
   language: "English",
   attachments: [],
-  recognition: null,
   isListening: false,
+  mediaRecorder: null,
+  micStream: null,
   speakingButton: null,
   audioContext: null,
   audioSource: null,
@@ -401,72 +402,87 @@ const setTone = (value) => {
   setStatus(`Tone set to ${value}`);
 };
 
-const langCodes = {
-  English: "en-US",
-  Spanish: "es-ES",
-  French: "fr-FR",
-  Portuguese: "pt-PT",
-  German: "de-DE",
+// MediaRecorder-based dictation — works in all browsers (Brave, Safari, Firefox, Chrome)
+// Records audio then sends to /api/transcribe (ElevenLabs Scribe STT)
+
+const stopDictation = () => {
+  if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
+    state.mediaRecorder.stop();
+  }
+  if (state.micStream) {
+    state.micStream.getTracks().forEach((t) => t.stop());
+    state.micStream = null;
+  }
+  state.isListening = false;
+  state.mediaRecorder = null;
+  document.querySelectorAll('[data-tool="mic"]').forEach((el) => el.classList.remove("is-active"));
 };
 
-const startDictation = (button) => {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    setStatus("Voice input is not supported in this browser");
+const startDictation = async (button) => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus("Microphone not supported in this browser");
     return;
   }
 
-  // Stop if already listening
-  if (state.isListening && state.recognition) {
-    state.recognition.stop();
+  // Stop if already recording
+  if (state.isListening) {
+    stopDictation();
     return;
   }
-
-  // Always create a fresh instance — reusing after errors causes network failures
-  state.recognition = new SpeechRecognition();
-  state.recognition.lang = langCodes[state.language] || "en-US";
-  state.recognition.interimResults = false;
-  state.recognition.maxAlternatives = 1;
-  state.recognition.continuous = false;
-
-  state.recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    input.value = input.value ? `${input.value} ${transcript}` : transcript;
-    autosizeInput();
-    setStatus("Voice note added to message");
-  };
-
-  state.recognition.onerror = (event) => {
-    state.isListening = false;
-    state.recognition = null;
-    document.querySelectorAll('[data-tool="mic"]').forEach((el) => el.classList.remove("is-active"));
-    const messages = {
-      "not-allowed":    "Microphone access denied — allow it in browser settings",
-      "audio-capture":  "No microphone found",
-      "network":        "Speech API unreachable — check your connection",
-      "no-speech":      "No speech detected — try again",
-      "aborted":        "",
-    };
-    setStatus(messages[event.error] ?? `Voice error: ${event.error}`);
-  };
-
-  state.recognition.onend = () => {
-    state.isListening = false;
-    state.recognition = null;
-    document.querySelectorAll('[data-tool="mic"]').forEach((el) => el.classList.remove("is-active"));
-  };
-
-  state.isListening = true;
-  button.classList.add("is-active");
-  setStatus("Listening...");
 
   try {
-    state.recognition.start();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.micStream = stream;
+    state.isListening = true;
+    button.classList.add("is-active");
+    setStatus("Listening... click mic to stop");
+
+    const chunks = [];
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+    const recorder = new MediaRecorder(stream, { mimeType });
+    state.mediaRecorder = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      stopDictation();
+      setStatus("Transcribing...");
+
+      try {
+        const blob = new Blob(chunks, { type: mimeType });
+        const formData = new FormData();
+        formData.append("audio", blob, mimeType === "audio/webm" ? "audio.webm" : "audio.mp4");
+        formData.append("language_code", { English:"en", Spanish:"es", French:"fr", Portuguese:"pt", German:"de" }[state.language] || "en");
+        formData.append("model_id", "scribe_v1");
+
+        const res = await fetch("/api/transcribe", { method: "POST", body: formData });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        if (!data.transcript) {
+          setStatus("No speech detected — try again");
+          return;
+        }
+
+        input.value = input.value ? `${input.value} ${data.transcript}` : data.transcript;
+        autosizeInput();
+        setStatus("Voice note added");
+      } catch (err) {
+        setStatus(`Transcription error: ${err.message}`);
+      }
+    };
+
+    recorder.start();
   } catch (err) {
     state.isListening = false;
-    state.recognition = null;
     button.classList.remove("is-active");
-    setStatus(`Could not start mic: ${err.message}`);
+    if (err.name === "NotAllowedError") {
+      setStatus("Microphone access denied — allow it in browser settings");
+    } else {
+      setStatus(`Mic error: ${err.message}`);
+    }
   }
 };
 
