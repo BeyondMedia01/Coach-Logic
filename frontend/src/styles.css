@@ -1,0 +1,21 @@
+/* Basic, clean styles for the frontend demo */
+:root {
+  --bg: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --left: #eef0f2;
+  --right: #6e63f7;
+}
+html, body, #root { height: 100%; }
+body { margin: 0; background: #fff; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, Arial, sans-serif; }
+.topbar { height: 64px; display:flex; align-items:center; padding:0 16px; background:#f8f9fb; border-bottom:1px solid #e5e7eb; }
+.avatar { width:34px; height:34px; border-radius:50%; background:#e5e5e5; display:inline-flex; align-items:center; justify-content:center; margin-right:8px; }
+.title { font-weight:700; margin:6px 0 0; }
+.chat-area { display:flex; flex-direction:column; align-items:center; width:100%; }
+.bubble { display:flex; align-items:center; gap:8px; max-width:520px; padding:12px 16px; border-radius:12px; font-size:14px; line-height:1.5; margin:6px 0; }
+.bubble.left { background:#eef0f2; color:#111; }
+.bubble.right { background:#6e63f7; color:#fff; }
+.avatar-sm { width:28px; height:28px; border-radius:50%; background:#ddd; display:inline-flex; align-items:center; justify-content:center; }
+.composer { padding:12px 16px; display:flex; gap:8px; border-top:1px solid #eee; }
+.composer textarea { flex:1; padding:12px; border-radius:12px; border:1px solid #e5e7eb; }
+.composer .send { background:#6e63f7; color:#fff; border:none; padding:12px 16px; border-radius:12px; cursor:pointer; }
