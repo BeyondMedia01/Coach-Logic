@@ -3,15 +3,6 @@
 
 const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
 
-// Default voice IDs — override via request body voice_id
-const DEFAULT_VOICES = {
-  English:    "EXAVITQu4vr4xnSDxMaL", // Sarah (multilingual)
-  Spanish:    "EXAVITQu4vr4xnSDxMaL",
-  French:     "EXAVITQu4vr4xnSDxMaL",
-  Portuguese: "EXAVITQu4vr4xnSDxMaL",
-  German:     "EXAVITQu4vr4xnSDxMaL",
-};
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -28,11 +19,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "text is required" });
   }
 
-  const voiceId = voice_id || DEFAULT_VOICES[language] || DEFAULT_VOICES.English;
+  // Use provided voice_id or fall back to ElevenLabs' multilingual default
+  const targetVoiceId = voice_id || "EXAVITQu4vr4xnSDxMaL";
 
   try {
     const elevenRes = await fetch(
-      `${ELEVENLABS_BASE}/text-to-speech/${voiceId}/stream`,
+      `${ELEVENLABS_BASE}/text-to-speech/${targetVoiceId}`,
       {
         method: "POST",
         headers: {
@@ -62,23 +54,15 @@ export default async function handler(req, res) {
       });
     }
 
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Cache-Control", "no-store");
+    // Collect full audio buffer then send — more reliable than streaming on Vercel
+    const audioBuffer = Buffer.from(await elevenRes.arrayBuffer());
 
-    // Stream the audio directly to the client
-    const reader = elevenRes.body.getReader();
-    const pump = async () => {
-      const { done, value } = await reader.read();
-      if (done) {
-        res.end();
-        return;
-      }
-      res.write(Buffer.from(value));
-      await pump();
-    };
-    await pump();
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", audioBuffer.length);
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).send(audioBuffer);
   } catch (err) {
     console.error("speak handler error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: err.message });
   }
 }
