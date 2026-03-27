@@ -23,7 +23,17 @@ const state = {
   mediaRecorder: null,
   micStream: null,
   menuOwner: null,
-  history: [], // conversation history sent to Groq
+  // Pre-seed history with the initial HTML exchange so Groq has full context
+  history: [
+    {
+      role: "assistant",
+      content: "Hi, I'm Coach Logic! My mission is to offer you personalized support and deliver actionable insights to help you reach your goals. To help me provide you with personalized recommendations, I would love to learn more about you and your business — what is your business name?",
+    },
+    {
+      role: "user",
+      content: "Hello, and thank you.",
+    },
+  ],
 };
 
 const menus = {
@@ -198,11 +208,10 @@ const applyFeedbackState = (actions, value) => {
   setStatus(actions.dataset.feedback ? `Feedback marked: ${actions.dataset.feedback}` : "Feedback cleared");
 };
 
-const createActionRow = (includeTone = true) => {
+const createActionRow = () => {
   const actions = document.createElement("div");
   actions.className = "message-actions";
   actions.innerHTML = `
-    ${includeTone ? `<button class="pill-btn tone-pill" type="button">${state.tone}</button>` : ""}
     <button class="icon-btn message-action-btn" type="button" title="Copy" data-action="copy">
       <svg viewBox="0 0 24 24" role="img">
         <path d="M16 1H6a2 2 0 0 0-2 2v12h2V3h10V1Zm3 4H10a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H10V7h9v14Z"></path>
@@ -633,9 +642,6 @@ const setLanguage = (value) => {
 const setTone = (value) => {
   state.tone = value;
   if (personalitySelect) personalitySelect.value = value;
-  document.querySelectorAll(".tone-pill").forEach((pill) => {
-    pill.textContent = value;
-  });
   setStatus(`Personality: ${value}`);
 };
 
@@ -828,13 +834,7 @@ const handleTool = (tool, button) => {
 
 thread.addEventListener("click", async (event) => {
   const actionButton = event.target.closest(".message-action-btn");
-  if (!actionButton) {
-    const toneButton = event.target.closest(".tone-pill");
-    if (toneButton) {
-      openMenu("tone", toneButton, menus.tone, setTone);
-    }
-    return;
-  }
+  if (!actionButton) return;
 
   const bubble = actionButton.closest(".message-cluster")?.querySelector(".message-bubble");
   const text = bubble?.innerText.trim() || "";
@@ -931,7 +931,7 @@ input.addEventListener("keydown", (event) => {
 input.addEventListener("input", autosizeInput);
 
 document.addEventListener("click", (event) => {
-  if (!event.target.closest(".floating-menu") && !event.target.closest(".tone-pill")) {
+  if (!event.target.closest(".floating-menu")) {
     closeMenu();
   }
 });
