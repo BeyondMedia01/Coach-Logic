@@ -81,6 +81,28 @@ const languagePlaceholders = {
   Portuguese: "Envie uma mensagem para o Coach Logic...",
 };
 
+// Maps ElevenLabs/ISO language codes → state.language names
+const langCodeMap = {
+  en: "English", es: "Spanish", fr: "French", pt: "Portuguese", de: "German",
+};
+
+// Lightweight heuristic detector for the 5 supported languages.
+// Returns the detected language name, or null if confidence is low.
+const langPatterns = {
+  German:     /[äöüÄÖÜß]|\b(ich|sie|und|das|ist|nicht|auch|mit|für|auf|eine?|des|der|die)\b/i,
+  French:     /[éèêëàâùûîïœç]|\b(je|vous|nous|est|les|des|une?|pour|que|dans|avec|sur|pas|ne)\b/i,
+  Spanish:    /[ñ¿¡]|[áéíóú]|\b(el|la|los|las|es|que|en|un|una|por|con|del|al|me|te|se)\b/i,
+  Portuguese: /[ãõ]|ç|\b(não|isso|para|com|que|por|mais|como|tem|ser|são|uma)\b/i,
+};
+
+const detectLanguage = (text) => {
+  if (text.length < 3) return null;
+  for (const [lang, pattern] of Object.entries(langPatterns)) {
+    if (pattern.test(text)) return lang;
+  }
+  return null; // null = don't change; fall back to current setting
+};
+
 const setStatus = (text) => {
   composerStatus.textContent = text;
   composerMeta.classList.toggle("is-visible", !!text);
@@ -641,7 +663,7 @@ const startDictation = async (button) => {
         // Transcribe in background, then trigger reply
         const formData = new FormData();
         formData.append("file", blob, mimeType === "audio/webm" ? "audio.webm" : "audio.mp4");
-        formData.append("language_code", { English:"en", Spanish:"es", French:"fr", Portuguese:"pt", German:"de" }[state.language] || "en");
+        // No language_code — let ElevenLabs Scribe auto-detect the spoken language
         formData.append("model_id", "scribe_v1");
 
         const res = await fetch("/api/transcribe", { method: "POST", body: formData });
@@ -651,6 +673,12 @@ const startDictation = async (button) => {
         if (!data.transcript) {
           setStatus("No speech detected");
           return;
+        }
+
+        // Auto-switch UI language to match what was spoken
+        if (data.language_code) {
+          const detected = langCodeMap[data.language_code.slice(0, 2)];
+          if (detected && detected !== state.language) setLanguage(detected);
         }
 
         setStatus("");
@@ -769,6 +797,13 @@ form.addEventListener("submit", (event) => {
   }
 
   const text = value || "Shared attachments";
+
+  // Auto-detect language from typed text
+  if (value) {
+    const detected = detectLanguage(value);
+    if (detected && detected !== state.language) setLanguage(detected);
+  }
+
   thread.appendChild(createUserMessage(text));
 
   if (state.attachments.length) {
