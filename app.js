@@ -9,8 +9,7 @@ const attachmentInput = document.getElementById("attachment-input");
 const attachmentList = document.getElementById("attachment-list");
 const floatingMenu = document.getElementById("floating-menu");
 const languageSelect = document.getElementById("language-select");
-const tonePill = document.getElementById("tone-pill");
-const composerTonePill = document.getElementById("composer-tone-pill");
+const personalitySelect = document.getElementById("personality-select");
 
 const SPEEDS = [1, 1.5, 2];
 
@@ -633,11 +632,11 @@ const setLanguage = (value) => {
 
 const setTone = (value) => {
   state.tone = value;
-  tonePill.textContent = value;
+  if (personalitySelect) personalitySelect.value = value;
   document.querySelectorAll(".tone-pill").forEach((pill) => {
     pill.textContent = value;
   });
-  setStatus(`Tone set to ${value}`);
+  setStatus(`Personality: ${value}`);
 };
 
 // MediaRecorder-based dictation — works in all browsers (Brave, Safari, Firefox, Chrome)
@@ -876,7 +875,7 @@ attachmentInput.addEventListener("change", (event) => {
 });
 
 if (languageSelect) languageSelect.addEventListener("change", (event) => setLanguage(event.target.value));
-if (composerTonePill) composerTonePill.addEventListener("click", () => openMenu("tone", composerTonePill, menus.tone, setTone));
+if (personalitySelect) personalitySelect.addEventListener("change", (e) => setTone(e.target.value));
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
