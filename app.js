@@ -651,6 +651,12 @@ const startDictation = async (button) => {
 
       try {
         const blob = new Blob(chunks, { type: mimeType });
+
+        if (blob.size < 1000) {
+          setStatus("No audio captured — try again");
+          return;
+        }
+
         const objectUrl = URL.createObjectURL(blob);
 
         // Post user voice bubble immediately so the audio is visible right away
@@ -688,7 +694,7 @@ const startDictation = async (button) => {
       }
     };
 
-    recorder.start();
+    recorder.start(200); // timeslice ensures ondataavailable fires even for short recordings
   } catch (err) {
     state.isListening = false;
     button.classList.remove("is-active");
