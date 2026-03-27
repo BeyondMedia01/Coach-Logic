@@ -58,6 +58,34 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
   gap: 12px;
 }
 
+.gender-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.gender-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.gender-btn.is-active {
+  background: #6366f1;
+  color: #fff;
+}
+.gender-btn:not(.is-active):hover {
+  background: #f4f5fb;
+  color: #374151;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;

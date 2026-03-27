@@ -17,6 +17,7 @@ const state = {
   messageCount: 1,
   tone: "Professional",
   language: "English",
+  voiceGender: "female",
   attachments: [],
   isListening: false,
   mediaRecorder: null,
@@ -49,20 +50,19 @@ const assistantReplies = {
   German:     "Danke fürs Teilen. Ich erfasse das, um die nächsten Onboarding-Fragen auf Ihr Unternehmen abzustimmen.",
 };
 
-// Personality → ElevenLabs voice ID mapping.
-// Each personality has a distinct voice character.
-// Replace voice_id values with your chosen Coach Logic voice IDs from ElevenLabs.
+// Personality → ElevenLabs voice IDs, one per gender.
+// Swap any voice_id for your own ElevenLabs cloned/custom voices later.
 const personalityVoices = {
-  Professional: { name: "Rachel",  voice_id: "21m00Tcm4TlvDq8ikWAM" }, // calm, articulate
-  Casual:       { name: "Sam",     voice_id: "yoZ06aMxZJJ28mfd3POQ" }, // relaxed, conversational
-  Friendly:     { name: "Bella",   voice_id: "EXAVITQu4vr4xnSDxMaL" }, // warm, approachable
-  Formal:       { name: "Arnold",  voice_id: "VR6AewLTigWG4xSOukaG" }, // crisp, authoritative
-  Direct:       { name: "Domi",    voice_id: "AZnzlk1XvdvUeBnXmlld" }, // strong, confident
-  Encouraging:  { name: "Elli",    voice_id: "MF3mGyEYCl7XYWbV9V6O" }, // upbeat, expressive
-  Empathetic:   { name: "Josh",    voice_id: "TxGEqnHWrfWFTfGW9XjX" }, // warm, understanding
-  Creative:     { name: "Antoni",  voice_id: "ErXwobaYiN019PkySvjV" }, // engaging, dynamic
-  Humorous:     { name: "Sam",     voice_id: "yoZ06aMxZJJ28mfd3POQ" }, // light, playful
-  Concise:      { name: "Adam",    voice_id: "pNInz6obpgDQGcFmaJgB" }, // deep, clear
+  Professional: { female: { name: "Rachel",  voice_id: "21m00Tcm4TlvDq8ikWAM" }, male: { name: "Adam",    voice_id: "pNInz6obpgDQGcFmaJgB" } },
+  Casual:       { female: { name: "Elli",    voice_id: "MF3mGyEYCl7XYWbV9V6O" }, male: { name: "Sam",     voice_id: "yoZ06aMxZJJ28mfd3POQ" } },
+  Friendly:     { female: { name: "Bella",   voice_id: "EXAVITQu4vr4xnSDxMaL" }, male: { name: "Antoni",  voice_id: "ErXwobaYiN019PkySvjV" } },
+  Formal:       { female: { name: "Dorothy", voice_id: "ThT5KcBeYPX3keUQqHPh" }, male: { name: "Arnold",  voice_id: "VR6AewLTigWG4xSOukaG" } },
+  Direct:       { female: { name: "Domi",    voice_id: "AZnzlk1XvdvUeBnXmlld" }, male: { name: "Josh",    voice_id: "TxGEqnHWrfWFTfGW9XjX" } },
+  Encouraging:  { female: { name: "Elli",    voice_id: "MF3mGyEYCl7XYWbV9V6O" }, male: { name: "Antoni",  voice_id: "ErXwobaYiN019PkySvjV" } },
+  Empathetic:   { female: { name: "Bella",   voice_id: "EXAVITQu4vr4xnSDxMaL" }, male: { name: "Josh",    voice_id: "TxGEqnHWrfWFTfGW9XjX" } },
+  Creative:     { female: { name: "Nicole",  voice_id: "piTKgcLEGmPE4e6mEKli" }, male: { name: "Antoni",  voice_id: "ErXwobaYiN019PkySvjV" } },
+  Humorous:     { female: { name: "Elli",    voice_id: "MF3mGyEYCl7XYWbV9V6O" }, male: { name: "Sam",     voice_id: "yoZ06aMxZJJ28mfd3POQ" } },
+  Concise:      { female: { name: "Rachel",  voice_id: "21m00Tcm4TlvDq8ikWAM" }, male: { name: "Adam",    voice_id: "pNInz6obpgDQGcFmaJgB" } },
 };
 
 // Language → fallback voice (used when personality voice not resolved)
@@ -259,7 +259,7 @@ const createAssistantReply = (text) => {
 
   const cluster = row.querySelector(".message-cluster");
   const voiceProfile =
-    personalityVoices[state.tone] ||
+    personalityVoices[state.tone]?.[state.voiceGender] ||
     elevenLabsVoices[state.language] ||
     elevenLabsVoices.English;
 
@@ -876,6 +876,14 @@ attachmentInput.addEventListener("change", (event) => {
 
 if (languageSelect) languageSelect.addEventListener("change", (event) => setLanguage(event.target.value));
 if (personalitySelect) personalitySelect.addEventListener("change", (e) => setTone(e.target.value));
+
+document.querySelectorAll(".gender-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.voiceGender = btn.dataset.gender;
+    document.querySelectorAll(".gender-btn").forEach((b) => b.classList.toggle("is-active", b === btn));
+    setStatus(`Voice: ${btn.dataset.gender}`);
+  });
+});
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
