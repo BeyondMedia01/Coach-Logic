@@ -7,6 +7,9 @@ import AudioPreview from "./AudioPreview";
 import ComposerBar from "./ComposerBar";
 import { detectLanguage } from "@/lib/language";
 import { getVoiceId, type Personality, type Language } from "@/lib/voices";
+import { useAvatarSession } from "@/components/avatar/useAvatarSession";
+import AvatarPanel from "@/components/avatar/AvatarPanel";
+import { cn } from "@/lib/utils";
 
 export interface Message {
   id: string;
@@ -63,6 +66,15 @@ export default function ChatShell() {
   const [audioPreview, setAudioPreview] = useState<AudioPreviewState | null>(null);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [isListening, setIsListening] = useState(false);
+
+  const {
+    isOpen: isAvatarOpen,
+    isConnecting: isAvatarConnecting,
+    conversationUrl,
+    error: avatarError,
+    startSession: startAvatar,
+    endSession: endAvatar,
+  } = useAvatarSession(tone, language);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -263,31 +275,53 @@ export default function ChatShell() {
         onToggleGender={() => setVoiceGender((g) => (g === "female" ? "male" : "female"))}
       />
 
-      {/* Thread — scrollable middle */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-6">
-          <div className="text-center mb-8">
-            <h1 className="font-bricolage font-bold text-2xl text-foreground tracking-tight">
-              Let&apos;s get to know each other!
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
-          </div>
+      {/* Middle: split when avatar open, full-width when not */}
+      <div className={cn("flex-1 overflow-hidden flex", isAvatarOpen ? "flex-row" : "flex-col")}>
+        {/* Chat thread */}
+        <div
+          className={cn(
+            "overflow-y-auto",
+            isAvatarOpen ? "flex-[0_0_60%]" : "flex-1"
+          )}
+        >
+          <div className="max-w-3xl mx-auto px-4 py-6">
+            <div className="text-center mb-8">
+              <h1 className="font-bricolage font-bold text-2xl text-foreground tracking-tight">
+                Let&apos;s get to know each other!
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {new Date().toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+            </div>
 
-          <MessageThread
-            messages={messages}
-            tone={tone}
-            voiceGender={voiceGender}
-            status={isTyping ? "Thinking…" : undefined}
-            onToneChange={setTone}
-          />
-          <div ref={threadEndRef} />
+            <MessageThread
+              messages={messages}
+              tone={tone}
+              voiceGender={voiceGender}
+              status={isTyping ? "Thinking…" : undefined}
+              onToneChange={setTone}
+            />
+            <div ref={threadEndRef} />
+          </div>
         </div>
+
+        {/* Avatar panel — desktop only (hidden on mobile, shown md+) */}
+        {isAvatarOpen && conversationUrl && (
+          <div className="hidden md:flex md:flex-col flex-[0_0_40%]">
+            <AvatarPanel conversationUrl={conversationUrl} onClose={endAvatar} />
+          </div>
+        )}
+
+        {/* Mobile: bottom sheet when avatar open */}
+        {isAvatarOpen && conversationUrl && (
+          <div className="fixed bottom-0 left-0 right-0 h-[50vh] z-50 flex flex-col md:hidden">
+            <AvatarPanel conversationUrl={conversationUrl} onClose={endAvatar} />
+          </div>
+        )}
       </div>
 
       {/* Audio preview strip */}
@@ -303,6 +337,15 @@ export default function ChatShell() {
         </div>
       )}
 
+      {/* Error banner */}
+      {avatarError && (
+        <div className="flex-shrink-0 max-w-3xl mx-auto w-full px-4 pb-2">
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-lg px-4 py-2">
+            {avatarError}
+          </div>
+        </div>
+      )}
+
       <ComposerBar
         value={inputValue}
         onChange={setInputValue}
@@ -313,6 +356,9 @@ export default function ChatShell() {
         onLanguageChange={setLanguage}
         onAttach={handleAttach}
         disabled={isTyping || isSendingAudio}
+        micDisabled={isAvatarOpen}
+        onAvatarClick={startAvatar}
+        isAvatarConnecting={isAvatarConnecting}
       />
     </div>
   );
