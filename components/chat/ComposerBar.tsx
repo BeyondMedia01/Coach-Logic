@@ -27,6 +27,9 @@ interface ComposerBarProps {
   onLanguageChange: (lang: string) => void;
   onAttach: (files: FileList) => void;
   disabled?: boolean;
+  micDisabled?: boolean;
+  onAvatarClick?: () => void;
+  isAvatarConnecting?: boolean;
 }
 
 const PLACEHOLDERS: Record<string, string> = {
@@ -48,6 +51,9 @@ export default function ComposerBar({
   onLanguageChange,
   onAttach,
   disabled,
+  micDisabled,
+  onAvatarClick,
+  isAvatarConnecting,
 }: ComposerBarProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -257,11 +263,35 @@ export default function ComposerBar({
               ))}
             </select>
 
+            {/* Avatar / camera button */}
+            {onAvatarClick && (
+              <button
+                type="button"
+                onClick={onAvatarClick}
+                disabled={disabled || isAvatarConnecting}
+                className={cn(
+                  "w-8 h-8 flex items-center justify-center rounded-lg transition-all",
+                  "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  "disabled:opacity-40 disabled:cursor-not-allowed"
+                )}
+                title="Talk to Coach (live avatar)"
+              >
+                {isAvatarConnecting ? (
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m22 8-6 4 6 4V8z"/>
+                    <rect width="14" height="12" x="2" y="6" rx="2" ry="2"/>
+                  </svg>
+                )}
+              </button>
+            )}
+
             {/* Mic */}
             <button
               type="button"
               onClick={onMicClick}
-              disabled={disabled}
+              disabled={disabled || micDisabled}
               className={cn(
                 "w-8 h-8 flex items-center justify-center rounded-lg transition-all",
                 isListening
