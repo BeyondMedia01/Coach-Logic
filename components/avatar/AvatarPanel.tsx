@@ -2,17 +2,22 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import DailyIframe, { DailyCall } from "@daily-co/daily-js";
-import { X, RefreshCw } from "lucide-react";
+import { X, RefreshCw, Ghost } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AvatarPanelProps {
   conversationUrl: string;
   onClose: () => void;
+  onTranscript?: (text: string, role: "user" | "assistant", isFinal: boolean) => void;
+  onSwitchToMascot?: () => void;
 }
 
-export default function AvatarPanel({ conversationUrl, onClose }: AvatarPanelProps) {
+export default function AvatarPanel({ conversationUrl, onClose, onTranscript, onSwitchToMascot }: AvatarPanelProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const callRef = useRef<DailyCall | null>(null);
+  const onTranscriptRef = useRef(onTranscript);
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
@@ -20,28 +25,63 @@ export default function AvatarPanel({ conversationUrl, onClose }: AvatarPanelPro
   const joinCall = useCallback(async (url: string) => {
     setConnectionError(false);
 
-    const call = DailyIframe.createCallObject({ audioSource: true, videoSource: false });
+    // Reuse existing Daily instance if present (React Strict Mode runs effects twice)
+    const existing = DailyIframe.getCallInstance();
+    const call = existing ?? DailyIframe.createCallObject({ audioSource: true, videoSource: false });
     callRef.current = call;
 
     call.on("participant-updated", (event) => {
       if (!event || event.participant.local) return;
 
-      // Attach remote video track
       const videoTrack = event.participant.tracks.video?.persistentTrack;
       if (videoTrack && videoRef.current) {
         videoRef.current.srcObject = new MediaStream([videoTrack]);
         setIsVideoReady(true);
       }
 
-      // Drive waveform from audio track presence
       const audioTrack = event.participant.tracks.audio?.persistentTrack;
+      if (audioTrack && audioRef.current) {
+        audioRef.current.srcObject = new MediaStream([audioTrack]);
+        audioRef.current.play().catch(() => {});
+      }
+
       setIsSpeaking(!!audioTrack && event.participant.tracks.audio?.state === "playable");
+    });
+
+    // Real-time transcription — fires as each participant speaks
+    call.on("transcription-message", (event) => {
+      console.log("[AvatarPanel] transcription-message", event);
+      if (!event) return;
+      const localId = call.participants()?.local?.session_id;
+      const role: "user" | "assistant" = event.participantId === localId ? "user" : "assistant";
+      const isFinal = event.rawResponse?.is_final ?? false;
+      onTranscriptRef.current?.(event.text, role, isFinal);
+    });
+
+    // Tavus may send conversation data via app-message instead of transcription-message
+    call.on("app-message", (event) => {
+      console.log("[AvatarPanel] app-message", event);
+      if (!event?.data) return;
+      const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      if (data?.event_type === "utterance" || data?.type === "utterance") {
+        const role: "user" | "assistant" = data.role ?? (data.properties?.role ?? "assistant");
+        const text: string = data.text ?? data.properties?.text ?? "";
+        if (text) onTranscriptRef.current?.(text, role, true);
+      }
     });
 
     call.on("error", () => setConnectionError(true));
     call.on("left-meeting", () => setConnectionError(true));
 
     await call.join({ url });
+
+    // Start transcription after joining
+    try {
+      await call.startTranscription();
+      console.log("[AvatarPanel] transcription started");
+    } catch (e) {
+      console.log("[AvatarPanel] startTranscription not available:", e);
+    }
   }, []);
 
   useEffect(() => {
@@ -49,7 +89,6 @@ export default function AvatarPanel({ conversationUrl, onClose }: AvatarPanelPro
 
     return () => {
       callRef.current?.leave();
-      callRef.current?.destroy();
       callRef.current = null;
     };
   }, [conversationUrl, joinCall]);
@@ -67,19 +106,30 @@ export default function AvatarPanel({ conversationUrl, onClose }: AvatarPanelPro
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
         <span className="text-sm font-semibold text-foreground">Coach Logic</span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title="End session"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {onSwitchToMascot && (
+            <button
+              type="button"
+              onClick={onSwitchToMascot}
+              className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Switch to mascot"
+            >
+              <Ghost className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="End session"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Video area */}
       <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-black">
-        {/* Spinner while connecting */}
         {!isVideoReady && !connectionError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -87,7 +137,6 @@ export default function AvatarPanel({ conversationUrl, onClose }: AvatarPanelPro
           </div>
         )}
 
-        {/* Video element */}
         <video
           ref={videoRef}
           autoPlay
@@ -95,7 +144,9 @@ export default function AvatarPanel({ conversationUrl, onClose }: AvatarPanelPro
           className={cn("w-full h-full object-cover", !isVideoReady && "invisible")}
         />
 
-        {/* Reconnect overlay */}
+        {/* Hidden audio element for remote audio track */}
+        <audio ref={audioRef} autoPlay playsInline className="hidden" />
+
         {connectionError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 z-10">
             <p className="text-sm text-muted-foreground">Connection lost</p>

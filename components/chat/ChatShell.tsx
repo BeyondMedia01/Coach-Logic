@@ -9,6 +9,7 @@ import { detectLanguage } from "@/lib/language";
 import { getVoiceId, type Personality, type Language } from "@/lib/voices";
 import { useAvatarSession } from "@/components/avatar/useAvatarSession";
 import AvatarPanel from "@/components/avatar/AvatarPanel";
+import MascotPanel from "@/components/avatar/MascotPanel";
 import { cn } from "@/lib/utils";
 
 export interface Message {
@@ -66,15 +67,69 @@ export default function ChatShell() {
   const [audioPreview, setAudioPreview] = useState<AudioPreviewState | null>(null);
   const [isSendingAudio, setIsSendingAudio] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [avatarMode, setAvatarMode] = useState<"human" | "mascot">("mascot");
+  const [isMascotOpen, setIsMascotOpen] = useState(false);
+  const [latestAssistantText, setLatestAssistantText] = useState(INITIAL_ASSISTANT_TEXT);
 
   const {
-    isOpen: isAvatarOpen,
+    isOpen: isHumanAvatarOpen,
     isConnecting: isAvatarConnecting,
     conversationUrl,
     error: avatarError,
-    startSession: startAvatar,
-    endSession: endAvatar,
+    startSession: startHumanAvatar,
+    endSession: endHumanAvatar,
   } = useAvatarSession(tone, language);
+
+  const isAvatarOpen = avatarMode === "mascot" ? isMascotOpen : isHumanAvatarOpen;
+
+  const startAvatar = useCallback(async () => {
+    if (avatarMode === "mascot") {
+      setIsMascotOpen(true);
+    } else {
+      await startHumanAvatar();
+    }
+  }, [avatarMode, startHumanAvatar]);
+
+  const endAvatar = useCallback(async () => {
+    if (avatarMode === "mascot") {
+      setIsMascotOpen(false);
+    } else {
+      await endHumanAvatar();
+    }
+  }, [avatarMode, endHumanAvatar]);
+
+  // Track live (in-progress) transcript message IDs so we can update them in place
+  const liveTranscriptIdRef = useRef<{ user: string | null; assistant: string | null }>({
+    user: null,
+    assistant: null,
+  });
+
+  const handleTranscript = useCallback(
+    (text: string, role: "user" | "assistant", isFinal: boolean) => {
+      const liveId = liveTranscriptIdRef.current[role];
+
+      if (liveId) {
+        // Update the existing live message in place
+        setMessages((prev) =>
+          prev.map((m) => (m.id === liveId ? { ...m, text } : m))
+        );
+      } else {
+        // Create a new live message
+        const id = mkId();
+        liveTranscriptIdRef.current[role] = id;
+        setMessages((prev) => [
+          ...prev,
+          { id, role, text, seed: Date.now() & 0xffffffff },
+        ]);
+      }
+
+      if (isFinal) {
+        // Lock the message in — clear the live ID so the next utterance starts fresh
+        liveTranscriptIdRef.current[role] = null;
+      }
+    },
+    []
+  );
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -121,6 +176,7 @@ export default function ChatShell() {
       const replySeed = Date.now() & 0xffffffff;
 
       setIsTyping(false);
+      setLatestAssistantText(reply);
       setMessages((prev) => [
         ...prev,
         {
@@ -309,17 +365,43 @@ export default function ChatShell() {
           </div>
         </div>
 
-        {/* Avatar panel — desktop only (hidden on mobile, shown md+) */}
-        {isAvatarOpen && conversationUrl && (
+        {/* Side panel — desktop only */}
+        {isAvatarOpen && (
           <div className="hidden md:flex md:flex-col flex-[0_0_40%]">
-            <AvatarPanel conversationUrl={conversationUrl} onClose={endAvatar} />
+            {avatarMode === "mascot" ? (
+              <MascotPanel
+                latestAssistantText={latestAssistantText}
+                onClose={endAvatar}
+                onSwitchToHuman={() => { setAvatarMode("human"); setIsMascotOpen(false); startHumanAvatar(); }}
+              />
+            ) : conversationUrl ? (
+              <AvatarPanel
+                conversationUrl={conversationUrl}
+                onClose={endAvatar}
+                onTranscript={handleTranscript}
+                onSwitchToMascot={() => { setAvatarMode("mascot"); endHumanAvatar(); setIsMascotOpen(true); }}
+              />
+            ) : null}
           </div>
         )}
 
-        {/* Mobile: bottom sheet when avatar open */}
-        {isAvatarOpen && conversationUrl && (
+        {/* Mobile: bottom sheet */}
+        {isAvatarOpen && (
           <div className="fixed bottom-0 left-0 right-0 h-[50vh] z-50 flex flex-col md:hidden">
-            <AvatarPanel conversationUrl={conversationUrl} onClose={endAvatar} />
+            {avatarMode === "mascot" ? (
+              <MascotPanel
+                latestAssistantText={latestAssistantText}
+                onClose={endAvatar}
+                onSwitchToHuman={() => { setAvatarMode("human"); setIsMascotOpen(false); startHumanAvatar(); }}
+              />
+            ) : conversationUrl ? (
+              <AvatarPanel
+                conversationUrl={conversationUrl}
+                onClose={endAvatar}
+                onTranscript={handleTranscript}
+                onSwitchToMascot={() => { setAvatarMode("mascot"); endHumanAvatar(); setIsMascotOpen(true); }}
+              />
+            ) : null}
           </div>
         )}
       </div>

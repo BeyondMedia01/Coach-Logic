@@ -3,3 +3,7 @@
 .vercel
 .superpowers/
 node_modules/
+.env*.local
+
+.next/
+tsconfig.tsbuildinfo
